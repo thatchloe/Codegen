@@ -31,6 +31,7 @@ for (let i = event.resultIndex; i < event.results.length; i++) {
     recognitionResult += transcript;
   } else {
     interimTranscription += transcript;
+    messageInput.value = recognitionResult;
   }
 }
 transcription.innerHTML = interimTranscription;
@@ -57,7 +58,7 @@ return cookieValue;
 function saveTranscription() {
 console.log(`Transcription: ${recognitionResult}`);
 const data = { transcription: recognitionResult };
-fetch('http://127.0.0.1:8000/', {
+fetch('/', {
   method: 'POST',
   headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
   body: JSON.stringify(data)
@@ -74,7 +75,7 @@ const code = messageInput.value.trim();
 const lang = document.querySelector('[name="lang"]').value;
 const action = document.querySelector('[name="action"]').value;
 const csrftoken = getCookie('csrftoken');
-fetch('http://127.0.0.1:8000/', {
+fetch('/', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/x-www-form-urlencoded',

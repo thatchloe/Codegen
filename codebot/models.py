@@ -11,3 +11,10 @@ class Code(models.Model):
 
 	def __str__(self):
 		return self.question
+
+class Resettoken(models.Model):
+    user = models.ForeignKey(
+        User, related_name="user", on_delete=models.CASCADE)
+    token = models.TextField(null=True, blank=True)
+    def __str__(self):
+        return self.user.username

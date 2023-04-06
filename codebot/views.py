@@ -1,25 +1,29 @@
 from django.shortcuts import render, redirect
 from django.contrib import messages
-
+from django.contrib.auth.models import User
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.forms import UserCreationForm
 from .forms import SignUpForm
-from .models import Code
+from .models import Code, Resettoken
 import requests
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 import openai
+from .utils import SendResetLink, generateToken
+from django.conf import settings
 
 import os
 from dotenv import load_dotenv
+import os
 
-# Load environment variables from .env file
 load_dotenv()
 
 # Get the API key from the environment variable
-OPENAI_API_KEY ='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'
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 
-#this can be improved and with CHOICEFIELD
+# this can be improved and with CHOICEFIELD
+
+
 @csrf_exempt
 def home(request):
     lang_list = ['c', 'clike', 'cpp', 'csharp', 'css', 'dart', 'django', 'go', 'html', 'java', 'javascript', 'markup',
@@ -27,22 +31,25 @@ def home(request):
                  'regex', 'ruby', 'rust', 'sass', 'scala', 'sql', 'swift', 'yaml']
     actions = ['Fix', 'Suggest', 'Explain', 'Write document']
     if request.method == "POST":
-        code = request.POST.get('message')
+        code = request.POST.get('code')
         lang = request.POST.get('lang')
         action = request.POST.get('action')
+        # checking if user types anything on the text box
+        if not code:
+            messages.success(
+                request, "Please speak or add message....")
+            return render(request, 'home.html', {'lang_list': lang_list, 'response': code, 'message': code, 'lang': lang, 'action': action, 'action_list': actions})
         # Check to make sure they picked a lang
-        if lang == "Select Programming Language":
-            messages.success(request, "Hey! You Forgot To Pick A Programming Language...")
-            return render(request, 'home.html', {'lang_list': lang_list, 'response': code, 'message': code, 'lang': lang, 'action':action, 'action_list': actions})
+        elif lang == "Select Programming Language":
+            messages.success(
+                request, "Please pick a programming language...")
+            return render(request, 'home.html', {'lang_list': lang_list, 'response': code, 'message': code, 'lang': lang, 'action': action, 'action_list': actions})
         elif action == "Select action":
-            messages.success(request, "Hey! You Forgot To Pick an action...")
-            return render(request, 'home.html', {'lang_list': lang_list, 'response': code, 'message': code, 'lang': lang, 'action':action, 'action_list':actions})
+            messages.success(request, "Please pick an action...")
+            return render(request, 'home.html', {'lang_list': lang_list, 'response': code, 'message': code, 'lang': lang, 'action': action, 'action_list': actions})
         else:
-            # OpenAI Key
             openai.api_key = OPENAI_API_KEY
-            # Create OpenAI Instance
             openai.Model.list()
-            # Make an OpenAI Request
             try:
                 response = openai.Completion.create(
                     engine='text-davinci-003',
@@ -53,26 +60,17 @@ def home(request):
                     frequency_penalty=0.0,
                     presence_penalty=0.0,
                 )
-                # Parse the response
-                response = (response["choices"][0]["text"]).strip()
-                # Save To Database
-                record = Code(question=code, code_answer=response, language=lang, user=request.user)
+                response = (response["choices"][0]["text"])
+                record = Code(question=code, code_answer=response,
+                              language=lang, user=request.user)
                 record.save()
-
-                return render(request, 'home.html', {'lang_list': lang_list, 'response': response, 'lang': lang, 'action':action, 'action_list':actions})
+                return render(request, 'home.html', {'lang_list': lang_list, 'response': response, 'lang': lang, 'action': action, 'action_list': actions})
 
             except Exception as e:
-                return render(request, 'home.html', {'lang_list': lang_list, 'response': e, 'lang': lang, 'action':action, 'action_list':actions})
+                print(e)
+                return render(request, 'home.html', {'lang_list': lang_list, 'response': e, 'lang': lang, 'action': action, 'action_list': actions})
 
-    return render(request, 'home.html', {'lang_list': lang_list, 'action_list':actions})
-
-
-
-
-
-
-
-
+    return render(request, 'home.html', {'lang_list': lang_list, 'action_list': actions})
 
 
 def login_user(request):
@@ -82,7 +80,6 @@ def login_user(request):
         user = authenticate(request, username=username, password=password)
         if user is not None:
             login(request, user)
-            messages.success(request, "You Have Been Logged In!  Woohoo!")
             return redirect('home')
         else:
             messages.success(request, "Error Logging In. Please Try Again...")
@@ -93,13 +90,12 @@ def login_user(request):
 
 def logout_user(request):
     logout(request)
-    messages.success(request, "You Have Been Logged Out... Have A Nice Day!")
     return redirect('home')
 
 
 def register_user(request):
+    form = SignUpForm(request.POST or None)
     if request.method == "POST":
-        form = SignUpForm(request.POST)
         if form.is_valid():
             form.save()
             username = form.cleaned_data['username']
@@ -108,10 +104,6 @@ def register_user(request):
             login(request, user)
             messages.success(request, "You Have Registered...Congrats!!")
             return redirect('home')
-
-    else:
-        form = SignUpForm()
-
     return render(request, 'register.html', {"form": form})
 
 
@@ -126,7 +118,56 @@ def past(request):
 
 def delete_past(request, Past_id):
     past = Code.objects.get(pk=Past_id)
+    if request.user != past.user:
+        messages.success(request, "You are not allowed to delete...")
+        return redirect('past')
     past.delete()
     messages.success(request, "Deleted Successfully...")
     return redirect('past')
 
+def password_reset_verified(request, id):
+    valid = False
+    validtoken = Resettoken.objects.filter(token=id)
+    if validtoken:
+        valid = True
+    if request.method == "POST":
+        validtoken = Resettoken.objects.filter(token=id)
+        if validtoken:
+            validtoken = Resettoken.objects.filter(token=id)[0]
+            password = request.POST.get('password')
+            password2 = request.POST.get('password2')
+            if password != password2:
+                messages.success(
+                    request, "Passwords do not match. Please try again.")
+                return render(request, 'newpassword.html', {"valid": valid})
+            user = User.objects.get(user=validtoken)
+            user.set_password(password)
+            user.save()
+            validtoken.token = ''
+            validtoken.save()
+            messages.success(request, 'Password Change Successfully...')
+            return redirect('login')
+    return render(request, 'newpassword.html', {"valid": valid})
+
+def password_reset(request):
+    if request.method == "POST":
+        email = request.POST.get('email')
+        currentuser = User.objects.filter(email=email)
+        if currentuser:
+            currentuser = User.objects.filter(email=email)[0]
+            try:
+                usertoken = Resettoken.objects.get(user=currentuser)
+            except:
+                usertoken = Resettoken.objects.create(user=currentuser)
+            token = generateToken()
+            usertoken.token = token
+            usertoken.save()
+            user = currentuser.username
+            subject = "Codegen password reset instructions"
+            link = settings.DOMAIN + "/forgot_password/" + token
+            body = f"Hi {user}, \nAs you have requested for reset password instructions, here they are, please follow the URL: \n{link}\nAlternatively, open the url in your browser.\n"
+            if SendResetLink(subject, body, email):
+                messages.success(request, "Reset Link Send Successfully...")
+
+        return render(request, 'passwordreset.html', {"page": 'success'})
+    return render(request, 'passwordreset.html')
