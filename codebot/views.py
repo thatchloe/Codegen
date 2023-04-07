@@ -4,14 +4,14 @@ from django.contrib.auth.models import User
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.forms import UserCreationForm
 from .forms import SignUpForm
-from .models import Code, Resettoken
+from .models import Code, resettoken
 import requests
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 import openai
 from .utils import SendResetLink, generateToken
 from django.conf import settings
-
+from django.contrib.auth.hashers import make_password
 import os
 from dotenv import load_dotenv
 import os
@@ -100,9 +100,10 @@ def register_user(request):
             form.save()
             username = form.cleaned_data['username']
             password = form.cleaned_data['password1']
-            user = authenticate(username=username, password=password)
+            email = form.cleaned_data['email']
+            user = authenticate(username=username, password=password, email=email)
             login(request, user)
-            messages.success(request, "You Have Registered...Congrats!!")
+            messages.success(request, f'Account created for {username}!')
             return redirect('home')
     return render(request, 'register.html', {"form": form})
 
@@ -127,13 +128,13 @@ def delete_past(request, Past_id):
 
 def password_reset_verified(request, id):
     valid = False
-    validtoken = Resettoken.objects.filter(token=id)
+    validtoken = resettoken.objects.filter(token=id)
     if validtoken:
         valid = True
     if request.method == "POST":
-        validtoken = Resettoken.objects.filter(token=id)
+        validtoken = resettoken.objects.filter(token=id)
         if validtoken:
-            validtoken = Resettoken.objects.filter(token=id)[0]
+            validtoken = resettoken.objects.filter(token=id)[0]
             password = request.POST.get('password')
             password2 = request.POST.get('password2')
             if password != password2:
@@ -141,7 +142,7 @@ def password_reset_verified(request, id):
                     request, "Passwords do not match. Please try again.")
                 return render(request, 'newpassword.html', {"valid": valid})
             user = User.objects.get(user=validtoken)
-            user.set_password(password)
+            user.password = make_password(password)
             user.save()
             validtoken.token = ''
             validtoken.save()
@@ -156,9 +157,9 @@ def password_reset(request):
         if currentuser:
             currentuser = User.objects.filter(email=email)[0]
             try:
-                usertoken = Resettoken.objects.get(user=currentuser)
+                usertoken = resettoken.objects.get(user=currentuser)
             except:
-                usertoken = Resettoken.objects.create(user=currentuser)
+                usertoken = resettoken.objects.create(user=currentuser)
             token = generateToken()
             usertoken.token = token
             usertoken.save()

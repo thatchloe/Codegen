@@ -30,4 +30,11 @@ class SignUpForm(UserCreationForm):
 		self.fields['password2'].widget.attrs['placeholder'] = 'Confirm Password'
 		self.fields['password2'].label = ''
 		self.fields['password2'].help_text = '<span class="form-text text-muted"><small>Enter the same password as before, for verification.</small></span>'
-		
+
+	def clean(self):
+		cleaned_data = super().clean()
+		email = cleaned_data.get('email')
+		if User.objects.filter(email=email).exists():
+			msg = 'A user with that email already exists.'
+			self.add_error('email', msg)
+		return self.cleaned_data
