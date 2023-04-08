@@ -1,1 +1,1 @@
-"web: gunicorn codegen.wsgi --log-file -" 
+"web:gunicorn codegen.wsgi --log-file -" 
