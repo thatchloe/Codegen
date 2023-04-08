@@ -1,1 +1,1 @@
-"web: gunicorn codegen.wsgi" 
+"web: python manage.py runserver" 
