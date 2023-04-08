@@ -1,1 +1,1 @@
-"web: gunicorn codegen.wsgi" 
+"web: gunicorn myproject.wsgi" 
