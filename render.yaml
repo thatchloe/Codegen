@@ -9,6 +9,7 @@ services:
     plan: free
     name: codebot
     runtime: python
+    pythonVersion: 3.11.9
     buildCommand: './build.sh'
     startCommand: 'python -m gunicorn codebot.asgi:application -k uvicorn.workers.UvicornWorker'
     envVars:
