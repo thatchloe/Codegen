@@ -1,17 +1,11 @@
 #!/usr/bin/env bash
-set -e  # Exit on any failure
 
-# Update and install system deps (optional, if needed)
-# apt-get update && apt-get install -y build-essential libpq-dev
+# Fail the build if any command fails
+set -o errexit
 
-# Upgrade pip
+# Upgrade pip and install wheels support
 pip install --upgrade pip
+pip install wheel setuptools
 
 # Install Python dependencies
 pip install -r requirements.txt
-
-# Run Django migrations
-python manage.py migrate --noinput
-
-# (Optional) Collect static files
-python manage.py collectstatic --noinput
